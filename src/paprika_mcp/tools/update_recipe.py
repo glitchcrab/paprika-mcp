@@ -5,7 +5,7 @@ from typing import Any
 
 from mcp.types import TextContent
 
-from ..utils import get_remote
+from ..utils import get_categories, get_remote
 
 
 async def update_recipe_tool(args: dict[str, Any]) -> list[TextContent]:
@@ -45,7 +45,77 @@ async def update_recipe_tool(args: dict[str, Any]) -> list[TextContent]:
             )
         ]
 
-    # Perform the find/replace
+    # Special handling for categories field (stored internally as a UUID list)
+    if field == "categories":
+        categories_info = get_categories(remote.bearer_token)
+        uid_to_name = categories_info["uid_to_name"]
+        name_to_uid = categories_info["name_to_uid"]
+
+        # Convert UUID list to newline-separated names for find/replace
+        current_uids = field_value if isinstance(field_value, list) else []
+        current_names = "\n".join(
+            uid_to_name.get(uid, f"Unknown-{uid[:8]}") for uid in current_uids
+        )
+
+        if use_regex:
+            try:
+                new_names = re.sub(find, replace, current_names)
+            except re.error as e:
+                return [
+                    TextContent(
+                        type="text",
+                        text=f"Error: Invalid regex pattern '{find}': {str(e)}",
+                    )
+                ]
+        else:
+            new_names = current_names.replace(find, replace)
+
+        # Collapse any double-newlines left after removal
+        new_names = re.sub(r"\n{2,}", "\n", new_names).strip()
+
+        if new_names == current_names.strip():
+            return [
+                TextContent(
+                    type="text",
+                    text=f"No changes made - pattern '{find}' not found in categories of recipe '{recipe.name}'",
+                )
+            ]
+
+        # Convert names back to UUIDs
+        new_uid_list = []
+        for name in new_names.split("\n"):
+            name = name.strip()
+            if not name:
+                continue
+            uid = name_to_uid.get(name.lower())
+            if uid:
+                new_uid_list.append(uid)
+            else:
+                return [
+                    TextContent(
+                        type="text",
+                        text=f"Error: Category '{name}' not found in Paprika — cannot convert back to UUID. No changes were saved.",
+                    )
+                ]
+
+        recipe.categories = new_uid_list
+        try:
+            remote.upload_recipe(recipe)
+            return [
+                TextContent(
+                    type="text",
+                    text=f"Successfully updated categories in recipe '{recipe.name}' (ID: {recipe_id})\n\nOld categories:\n{current_names}\n\nNew categories:\n{new_names}",
+                )
+            ]
+        except Exception as e:
+            return [
+                TextContent(
+                    type="text",
+                    text=f"Error updating recipe '{recipe.name}': {str(e)}",
+                )
+            ]
+
+    # Perform the find/replace on string fields
     if use_regex:
         try:
             new_value = re.sub(find, replace, field_value)
