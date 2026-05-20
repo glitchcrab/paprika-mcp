@@ -24,7 +24,7 @@ authors = [
 ]
 dependencies = [
     "mcp>=1.0.0",
-    "paprika-recipes @ git+https://github.com/briantkatch/paprika-recipes@2.5.1",
+    "paprika-recipes @ git+https://github.com/briantkatch/paprika-recipes@2.5.2",
 ]
 
 [project.optional-dependencies]

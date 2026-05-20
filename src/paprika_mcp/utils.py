@@ -8,6 +8,7 @@ from typing import Any
 
 import requests
 from paprika_recipes.cache import DirectoryCache
+from paprika_recipes.exceptions import PaprikaError, RequestError
 from paprika_recipes.remote import Remote
 
 logger = logging.getLogger(__name__)
@@ -118,13 +119,15 @@ def get_remote() -> Remote:
         # Test authentication by accessing bearer_token
         _ = remote.bearer_token
         return remote
+    except (PaprikaError, RequestError) as e:
+        api_msg = str(e) or "unknown error"
+        raise type(e)(
+            f"Paprika authentication failed: {api_msg}. "
+            "Verify email and password in ~/.paprika-mcp/config.json "
+            "or PAPRIKA_EMAIL/PAPRIKA_PASSWORD environment variables."
+        ) from e
     except Exception as e:
-        logger.error(f"Failed to authenticate with Paprika API: {e}")
-        logger.error(
-            "Please verify your credentials in ~/.paprika-mcp/config.json "
-            "or PAPRIKA_EMAIL/PAPRIKA_PASSWORD environment variables. "
-            "You may also need to set a user_agent to mimic the official Paprika app."
-        )
+        logger.error(f"Failed to connect to Paprika API: {e}", exc_info=True)
         raise
 
 
